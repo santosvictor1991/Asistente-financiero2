@@ -1,32 +1,42 @@
 import streamlit as st
+import json
+import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
+from datetime import datetime
 
-# Autenticación con Google Sheets
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-credentials = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-client = gspread.authorize(credentials)
-
-# Abrir hoja de cálculo por nombre (crear una hoja y pegar el nombre aquí)
-spreadsheet = client.open("Formulario Asistente Financiero")
-sheet = spreadsheet.sheet1
-
-# Configuración de la app
-st.title("Formulario de Contacto - Asistente Financiero")
-st.write("Por favor, completa los siguientes datos para que podamos brindarte la asesoría adecuada.")
+# Título de la app
+st.title("📋 Formulario de contacto inteligente")
 
 # Campos del formulario
-nombre = st.text_input("Nombre completo")
-correo = st.text_input("Correo electrónico")
-telefono = st.text_input("Número de teléfono")
-tipo_asesoria = st.selectbox("Tipo de asesoría", ["Express ($150-$250)", "Esencial ($500-$800)", "Integral ($1,200-$2,500)"])
-presupuesto = st.text_input("¿Cuál es tu presupuesto estimado?")
-mensaje = st.text_area("¿En qué podemos ayudarte?")
+with st.form("contact_form"):
+    nombre = st.text_input("Nombre completo:")
+    correo = st.text_input("Correo electrónico:")
+    telefono = st.text_input("Número de teléfono:")
+    servicio = st.selectbox("Servicio de interés:", [
+        "Asesoría Express ($150–$250)",
+        "Asesoría Esencial ($500–$800 o $200–$300/mes)",
+        "Asesoría Integral ($1,200–$2,500)",
+        "Otro / Personalizado"
+    ])
+    mensaje = st.text_area("¿En qué podemos ayudarte?")
+    enviado = st.form_submit_button("Enviar")
 
-# Enviar información a Google Sheets
-if st.button("Enviar"):
-    if nombre and correo and telefono and mensaje:
-        sheet.append_row([nombre, correo, telefono, tipo_asesoria, presupuesto, mensaje])
-        st.success("✅ Tu información ha sido enviada con éxito. Pronto nos pondremos en contacto contigo.")
-    else:
-        st.warning("⚠️ Por favor, completa todos los campos antes de enviar.")
+# Si el formulario se envía
+if enviado:
+    try:
+        # Leer credenciales de secrets
+        service_account_info = json.loads(st.secrets["gcp_service_account"])
+        credentials = Credentials.from_service_account_info(service_account_info)
+
+        # Acceder a Google Sheets
+        gc = gspread.authorize(credentials)
+        sheet = gc.open("Formulario Contacto Financiero").sheet1  # nombre del archivo y hoja
+
+        # Datos del cliente
+        data = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), nombre, correo, telefono, servicio, mensaje]
+        sheet.append_row(data)
+
+        st.success("✅ ¡Tu información fue enviada con éxito!")
+    except Exception as e:
+        st.error(f"❌ Error al enviar el formulario: {e}")
